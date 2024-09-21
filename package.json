@@ -1,0 +1,20 @@
+{
+  "name": "WP-SERVER",
+  "version": "1.0.0",
+  "description": "",
+  "main": "satish.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@types/node": "^18.0.6",
+    "@whiskeysockets/baileys": "^6.7.7",
+    "package.json": "^2.0.1",
+    "pastebin-js": "^1.0.6",
+    "pino": "^9.2.0"
+  }
+}

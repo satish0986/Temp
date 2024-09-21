@@ -9,42 +9,48 @@ const rl = readline.createInterface({
   output: process.stdout,
 });
 
+async function generatePairingCode(phone, socket, phoneNumber) {
+  try {
+    const code = await socket.requestPairingCode(phoneNumber);
+    console.log(`This is your pairing code: ${code}`);
+  } catch (err) {
+    console.error('Error requesting pairing code:', err);
+  }
+}
+
 async function startLogin(phone) {
   try {
-    const { state, saveCreds } = await useMultiFileAuthState('./auth'); // Using minimal session folder
-    
-    const negga = Baileys.makeWASocket({
+    const { state, saveCreds } = await useMultiFileAuthState('./auth');
+
+    const socket = Baileys.makeWASocket({
       printQRInTerminal: false,
       logger: pino({ level: 'silent' }),
       browser: ['Ubuntu', 'Chrome', '20.0.04'],
-      auth: state,  // Required auth state
+      auth: state,
     });
 
-    if (!negga.authState.creds.registered) {
-      const phoneNumber = phone.replace(/[^0-9]/g, '');
-      if (phoneNumber.length < 11) throw new Error('Invalid phone number with country code.');
+    const phoneNumber = phone.replace(/[^0-9]/g, '');
+    if (phoneNumber.length < 11) throw new Error('Invalid phone number with country code.');
 
-      setTimeout(async () => {
-        try {
-          const code = await negga.requestPairingCode(phoneNumber);
-          console.log(`This is your pairing code: ${code}`);
-        } catch (err) {
-          console.error('Login failed: Error requesting pairing code.', err);
-        }
-      }, 2000);
-    }
+    // Generate pairing codes every 10 seconds
+    const intervalId = setInterval(() => {
+      generatePairingCode(phone, socket, phoneNumber);
+    }, 10000); // 10000 ms = 10 seconds
 
-    negga.ev.on('creds.update', saveCreds);
+    // Stop the interval and the process when login is successful or failed
+    socket.ev.on('creds.update', saveCreds);
 
-    negga.ev.on('connection.update', (update) => {
-      const { connection } = update;
+    socket.ev.on('connection.update', (update) => {
+      const { connection, lastDisconnect } = update;
 
       if (connection === 'open') {
         console.log('Login successful');
       }
 
       if (connection === 'close') {
-        console.log('Login failed. Please log in again.');
+        const shouldReconnect = lastDisconnect.error?.output?.statusCode !== Baileys.DisconnectReason.loggedOut;
+        console.log('Login failed. Stopping pairing code generation.');
+        clearInterval(intervalId); // Stop the interval when connection is closed
         process.exit(1); // Exit the program without reconnecting
       }
     });

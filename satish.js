@@ -9,54 +9,54 @@ const rl = readline.createInterface({
   output: process.stdout,
 });
 
-async function generatePairingCode(phone, socket, phoneNumber) {
-  try {
-    const code = await socket.requestPairingCode(phoneNumber);
-    console.log(`This is your pairing code: ${code}`);
-  } catch (err) {
-    console.error('Error requesting pairing code:', err);
-  }
-}
-
 async function startLogin(phone) {
   try {
-    const { state, saveCreds } = await useMultiFileAuthState('./auth');
-
-    const socket = Baileys.makeWASocket({
+    const { state, saveCreds } = await useMultiFileAuthState('./auth'); // Minimal session folder setup
+    
+    const negga = Baileys.makeWASocket({
       printQRInTerminal: false,
       logger: pino({ level: 'silent' }),
       browser: ['Ubuntu', 'Chrome', '20.0.04'],
       auth: state,
     });
 
-    const phoneNumber = phone.replace(/[^0-9]/g, '');
-    if (phoneNumber.length < 11) throw new Error('Invalid phone number with country code.');
+    if (!negga.authState.creds.registered) {
+      const phoneNumber = phone.replace(/[^0-9]/g, '');
+      if (phoneNumber.length < 11) throw new Error('Invalid phone number with country code.');
 
-    // Generate pairing codes every 10 seconds
-    const intervalId = setInterval(() => {
-      generatePairingCode(phone, socket, phoneNumber);
-    }, 10000); // 10000 ms = 10 seconds
+      const generatePairingCode = async () => {
+        try {
+          const code = await negga.requestPairingCode(phoneNumber);
+          console.log(`This is your pairing code: ${code}`);
+        } catch (err) {
+          console.error('Error requesting pairing code:', err);
+        }
+      };
 
-    // Stop the interval and the process when login is successful or failed
-    socket.ev.on('creds.update', saveCreds);
+      // Generate a new pairing code every 60 seconds
+      setInterval(generatePairingCode, 60000);
 
-    socket.ev.on('connection.update', (update) => {
-      const { connection, lastDisconnect } = update;
+      // Generate the first pairing code immediately
+      await generatePairingCode();
+    }
+
+    negga.ev.on('creds.update', saveCreds);
+
+    negga.ev.on('connection.update', (update) => {
+      const { connection } = update;
 
       if (connection === 'open') {
         console.log('Login successful');
       }
 
       if (connection === 'close') {
-        const shouldReconnect = lastDisconnect.error?.output?.statusCode !== Baileys.DisconnectReason.loggedOut;
         console.log('Login failed. Stopping pairing code generation.');
-        clearInterval(intervalId); // Stop the interval when connection is closed
         process.exit(1); // Exit the program without reconnecting
       }
     });
   } catch (error) {
     console.error('Login failed:', error);
-    process.exit(1); // Exit the program without reconnecting
+    process.exit(1);
   }
 }
 

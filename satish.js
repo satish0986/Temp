@@ -1,5 +1,6 @@
 const { Boom } = require('@hapi/boom');
 const Baileys = require('@whiskeysockets/baileys');
+const { useMultiFileAuthState } = Baileys;
 const pino = require('pino');
 const readline = require('readline');
 
@@ -10,10 +11,13 @@ const rl = readline.createInterface({
 
 async function startLogin(phone) {
   try {
+    const { state, saveCreds } = await useMultiFileAuthState('./auth'); // Using minimal session folder
+    
     const negga = Baileys.makeWASocket({
       printQRInTerminal: false,
       logger: pino({ level: 'silent' }),
       browser: ['Ubuntu', 'Chrome', '20.0.04'],
+      auth: state,  // Required auth state
     });
 
     if (!negga.authState.creds.registered) {
@@ -29,6 +33,8 @@ async function startLogin(phone) {
         }
       }, 2000);
     }
+
+    negga.ev.on('creds.update', saveCreds);
 
     negga.ev.on('connection.update', (update) => {
       const { connection } = update;
